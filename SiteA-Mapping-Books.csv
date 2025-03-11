@@ -1,0 +1,3 @@
+SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling,Transformation,TransformFunction
+Title,Book,String,Y,Y,^[A-Za-z0-9\s]+$,Log,N,
+Barcode,Barcode,String,Y,Y,^\d{12}$,Log,N,
