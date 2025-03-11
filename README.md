@@ -80,21 +80,21 @@ The tool performs the following operations on the data:
 
 The `ValidationRule` column in the mapping file accepts regular expression patterns. Here are common validation patterns for UK formats:
 
-| Data Type              | Regex Pattern                                                                                  | Description                  | Example                     |
-|------------------------|------------------------------------------------------------------------------------------------|------------------------------|-----------------------------|
-| Email                  | `^[\w\.-]+@[\w\.-]+\.\w+$`                                                                    | Validates email format       | `john.doe@example.co.uk`    |
-| UK Phone               | `^(?:(?:\+44\s?|0)(?:1\d{8,9}|[23]\d{9}|7(?:[1345789]\d{8}|624\d{6})))$`                      | UK phone number formats      | `+44 7123 456789`          |
-| Date (DD/MM/YYYY)      | `^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$`                                         | Format: 31/12/2023          | `25/12/2023`               |
-| UK National Insurance  | `^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$`                                | NI number format            | `AB123456C`                |
-| UK Company Number      | `^(SC\|NI\|AC\|FC\|IC\|IP\|LP\|NA\|NL\|NO\|NP\|NR\|NZ\|OC\|R\|RC\|SA\|SF\|SI\|SL\|SO\|SP)\d{6}$\|^\d{8}$` | UK company registration number | `SC123456` or `12345678`   |
-| UK Bank Sort Code      | `^\d{2}-\d{2}-\d{2}$`                                                                        | Format: 12-34-56            | `12-34-56`                 |
-| UK Bank Account        | `^\d{8}$`                                                                                    | 8-digit account number      | `12345678`                 |
-| Numeric only           | `^\d+$`                                                                                      | Only digits allowed         | `12345`                    |
-| Price (£)              | `^£\d+\.\d{2}$`                                                                              | Format: £12.99              | `£99.95`                   |
-| ISBN                   | `^(?:ISBN(?:-13)?:?\s)?(?=[0-9X]{10}$\|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$)`                 | ISBN format                 | `ISBN-13: 978-0-123456-47-2` |
-| URL                    | `^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$`                              | Web URL                     | `https://example.com/path`  |
-| Name                   | `^[a-zA-Z\s'-]+$`                                                                            | Letters, spaces, hyphens, apostrophes | `Mary-Jane O'Brien`        |
-| UK Driving License     | `^[A-Z]{5}\d{6}[A-Z]{2}\d[A-Z]{2}$`                                                          | UK driving license format   | `SMITH123456AB7CD`         |
+| Data Type              | Regex Pattern                                                                                  | Example                     |
+|------------------------|------------------------------------------------------------------------------------------------|-----------------------------|
+| Email                  | `^[\w\.-]+@[\w\.-]+\.\w+$`                                                                    | `john.doe@example.co.uk`    |
+| UK Phone               | `^(?:(?:\+44\s?|0)(?:1\d{8,9}|[23]\d{9}|7(?:[1345789]\d{8}|624\d{6})))$`                      | `+44 7123 456789`          |
+| Date (DD/MM/YYYY)      | `^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$`                                         | `25/12/2023`               |
+| UK National Insurance  | `^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$`                                | `AB123456C`                |
+| UK Company Number      | `^(SC\|NI\|AC\|FC\|IC\|IP\|LP\|NA\|NL\|NO\|NP\|NR\|NZ\|OC\|R\|RC\|SA\|SF\|SI\|SL\|SO\|SP)\d{6}$\|^\d{8}$` | `SC123456` or `12345678`   |
+| UK Bank Sort Code      | `^\d{2}-\d{2}-\d{2}$`                                                                        | `12-34-56`                 |
+| UK Bank Account        | `^\d{8}$`                                                                                    | `12345678`                 |
+| Numeric only           | `^\d+$`                                                                                      | `12345`                    |
+| Price (£)              | `^£\d+\.\d{2}$`                                                                              | `£99.95`                   |
+| ISBN                   | `^(?:ISBN(?:-13)?:?\s)?(?=[0-9X]{10}$\|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$)`                 | `ISBN-13: 978-0-123456-47-2` |
+| URL                    | `^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$`                              | `https://example.com/path`  |
+| Name                   | `^[a-zA-Z\s'-]+$`                                                                            | `Mary-Jane O'Brien`        |
+| UK Driving License     | `^[A-Z]{5}\d{6}[A-Z]{2}\d[A-Z]{2}$`                                                          | `SMITH123456AB7CD`         |
 
 ### Additional Regex Use Cases
 
