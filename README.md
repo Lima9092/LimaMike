@@ -93,6 +93,91 @@ $global:TransformFunctions = @{
 }
 ```
 
+Validation and Error Handling
+Validation Rule Examples
+The ValidationRule column in the mapping file accepts regular expression patterns. Here are common validation patterns for UK formats:
+Data TypeRegex PatternDescriptionEmail^[\w\.-]+@[\w\.-]+\.\w+$Validates email formatUK Phone`^(?:(?:+44\s?0)(?:1\d{8,9}Date (DD/MM/YYYY)`^(0[1-9][12][0-9]UK Postcode`^([A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}GIR ?0A{2})$`UK National Insurance^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$NI number formatUK VAT Number`^GB\d{9}$^GB\d{12}$`UK Company Number`^(SCNIUK Bank Sort Code^\d{2}-\d{2}-\d{2}$Format: 12-34-56UK Bank Account^\d{8}$8-digit account numberNumeric only^\d+$Only digits allowedPrice (£)^£\d+\.\d{2}$Format: £12.99ISBN^(?:ISBN(?:-13)?:?\s)?(?=[0-9X]{10}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$)ISBN formatURL^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$Web URLName^[a-zA-Z\s'-]+$Letters, spaces, hyphens, apostrophesUK Driving License^[A-Z]{5}\d{6}[A-Z]{2}\d[A-Z]{2}$UK driving license format
+Additional Regex Use Cases
+Validation PurposeRegex PatternDescriptionAlpha-numeric^[a-zA-Z0-9]+$Letters and numbers onlyFixed length^.{10}$Exactly 10 charactersMin-max length^.{8,16}$Between 8-16 charactersInteger range`^([1-9][1-9][0-9]Time (24-hour)`^([01]?[0-9]2[0-3]):[0-5][0-9]$`Hex color`^#([A-Fa-f0-9]{6}[A-Fa-f0-9]{3})$`IP Address^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$Format: 192.168.1.1UK Passport Number^[0-9]{9}$UK passport number (9 digits)UK NHS Number^\d{3}[ -]?\d{3}[ -]?\d{4}$Format: 123 456 7890
+Error Handling Options
+The ErrorHandling column in the mapping file specifies how validation errors should be treated. Valid options are:
+OptionDescriptionWarningHighlights the cell, logs the error, but allows processing to continueErrorHighlights the cell, logs the error, and marks the record as invalidLogOnly logs the error without visual highlighting or affecting processingIgnoreValidation fails but no error is logged or displayedRejectThe entire record is rejected from processingNullError field is set to null/empty but record is processedDefaultError field is set to a default value (specified in DefaultValue column)
+Example of mapping file with error handling:
+csvCopySourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling,Transformation,TransformFunction,DefaultValue
+Title,BookTitle,string,Y,N,,,N,,
+Author,AuthorName,string,Y,N,,,N,,
+Barcode,,string,Y,Y,^\d{12}$,Error,N,,
+PostCode,,string,Y,Y,^([A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}|GIR ?0A{2})$,Warning,N,,
+Pages,PageCount,int,N,Y,^\d+$,Default,N,,0
+Email,,string,N,Y,^[\w\.-]+@[\w\.-]+\.\w+$,Log,N,,
+PublicationDate,,datetime,Y,Y,^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$,Null,N,,
+Implementing Complex Validation
+For more complex validation that regex alone can't handle, you can create custom validation functions similar to transformation functions:
+powershellCopyfunction ValidateUKPostcode($value) {
+    # First standardize by removing spaces and converting to uppercase
+    $value = $value.ToUpper().Replace(" ", "")
+    
+    # Basic format check using regex
+    if (-not ($value -match '^[A-Z]{1,2}[0-9R][0-9A-Z]?[0-9][ABD-HJLNP-UW-Z]{2}$')) {
+        return $false
+    }
+    
+    # Additional validation logic
+    # For example, certain letter combinations are not used in the first position
+    $invalidFirstLetters = @("QV", "X")
+    $firstPart = if ($value[0..1] -join "" -match "^[A-Z]{2}$") { $value[0..1] -join "" } else { $value[0] }
+    
+    if ($invalidFirstLetters -contains $firstPart) {
+        return $false
+    }
+    
+    return $true
+}
+
+$global:ValidationFunctions = @{
+    "ValidateUKPostcode" = ${function:ValidateUKPostcode}
+}
+Then in your mapping file:
+csvCopySourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling,Transformation,TransformFunction,ValidationFunction
+Postcode,,string,Y,Y,,Error,N,,ValidateUKPostcode
+Validation Best Practices
+
+Start simple: Begin with basic validations and add complexity as needed
+Test thoroughly: Create test data that intentionally violates validation rules
+Layer validation: Use regex for format, custom functions for complex logic
+Balance strictness: Overly strict validation may reject valid data
+Use appropriate error handling: Choose between warning, error, and log based on data importance
+Document patterns: Keep a record of regex patterns and their purposes
+Consider data cleansing: Sometimes it's better to transform/cleanse than reject
+
+Example Validation Scenarios
+Library Book Catalog:
+csvCopySourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling
+Title,,string,Y,N,,Error
+ISBN,,string,Y,Y,^(?:ISBN(?:-13)?:?\s)?(?=[0-9X]{10}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$),Error
+PublishedYear,,int,Y,Y,^(19|20)\d{2}$,Error
+PageCount,,int,N,Y,^\d{1,4}$,Warning
+Publisher,,string,Y,N,,Log
+UK Customer Records:
+csvCopySourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling
+CustomerID,,string,Y,Y,^C\d{6}$,Error
+FirstName,,string,Y,Y,^[A-Za-z\-']{2,30}$,Warning
+LastName,,string,Y,Y,^[A-Za-z\-']{2,30}$,Warning
+EmailAddress,,string,Y,Y,^[\w\.-]+@[\w\.-]+\.\w+$,Error
+Postcode,,string,Y,Y,^([A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}|GIR ?0A{2})$,Error
+TelephoneNumber,,string,N,Y,^(?:(?:\+44\s?|0)(?:1\d{8,9}|[23]\d{9}|7(?:[1345789]\d{8}|624\d{6})))$,Warning
+NationalInsurance,,string,N,Y,^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$,Log
+UK Financial Transactions:
+csvCopySourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling
+TransactionID,,string,Y,Y,^T\d{10}$,Error
+Amount,,decimal,Y,Y,^\d+\.\d{2}$,Error
+Currency,,string,Y,Y,^(GBP|EUR|USD)$,Error
+SortCode,,string,Y,Y,^\d{2}-\d{2}-\d{2}$,Error
+AccountNumber,,string,Y,Y,^\d{8}$,Error
+TransactionDate,,datetime,Y,Y,^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$,Error
+VATNumber,,string,N,Y,^GB\d{9}$|^GB\d{12}$,Log
+By using these validation patterns and error handling options (including the Log option), you can ensure your data meets quality requirements while providing appropriate feedback for different types of validation issues, with formats specifically tailored for UK 
+
 ## Logging
 
 The tool provides detailed logging of:
