@@ -85,9 +85,7 @@ The `ValidationRule` column in the mapping file accepts regular expression patte
 | Email | `^[\w\.-]+@[\w\.-]+\.\w+$` | Validates email format |
 | UK Phone | `^(?:(?:\+44\s?|0)(?:1\d{8,9}|[23]\d{9}|7(?:[1345789]\d{8}|624\d{6})))$` | UK phone number formats |
 | Date (DD/MM/YYYY) | `^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$` | Format: 31/12/2023 |
-| UK Postcode | `^([A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}|GIR ?0A{2})$` | UK postcode format |
 | UK National Insurance | `^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$` | NI number format |
-| UK VAT Number | `^GB\d{9}$|^GB\d{12}$` | UK VAT number format |
 | UK Company Number | `^(SC|NI|AC|FC|IC|IP|LP|NA|NL|NO|NP|NR|NZ|OC|R|RC|SA|SF|SI|SL|SO|SP)\d{6}$|^\d{8}$` | UK company registration number |
 | UK Bank Sort Code | `^\d{2}-\d{2}-\d{2}$` | Format: 12-34-56 |
 | UK Bank Account | `^\d{8}$` | 8-digit account number |
