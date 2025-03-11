@@ -1,99 +1,57 @@
-# Library Data Transformation Tool
-
+Library Data Transformation Tool
 A PowerShell-based utility for transforming and validating CSV data according to mapping rules.
-
-## Overview
-
+Overview
 This tool provides a graphical interface for:
-- Loading mapping rules from a CSV file
-- Loading source data from a CSV file
-- Performing data validation against specified rules
-- Transforming data fields based on custom functions
-- Highlighting validation errors in a grid view
-- Exporting processed data to CSV
 
-## Features
+Loading mapping rules from a CSV file
+Loading source data from a CSV file
+Performing data validation against specified rules
+Transforming data fields based on custom functions
+Highlighting validation errors in a grid view
+Exporting processed data to CSV
 
-- **Data Mapping**: Define source and target field names, mandatory fields, data types, and validation rules
-- **Data Validation**: Validate data against regex patterns with visual error highlighting
-- **Data Transformation**: Apply custom transformation functions to data fields
-- **Visual Interface**: View data in a grid with alternating row colors and error highlighting
-- **Filtering**: Show only rows with validation errors
-- **Export**: Export processed data and error logs to CSV files
+Features
 
-## Requirements
+Data Mapping: Define source and target field names, mandatory fields, data types, and validation rules
+Data Validation: Validate data against regex patterns with visual error highlighting
+Data Transformation: Apply custom transformation functions to data fields
+Visual Interface: View data in a grid with alternating row colors and error highlighting
+Filtering: Show only rows with validation errors
+Export: Export processed data and error logs to CSV files
 
-- Windows PowerShell 5.1 or later
-- .NET Framework 4.5 or later
+Requirements
 
-## Usage
+Windows PowerShell 5.1 or later
+.NET Framework 4.5 or later
 
-1. Run the script to open the graphical interface
-2. Click "Load Files" to select your mapping and data files
-3. View processed data in the grid (validation errors highlighted in pink)
-4. Use "Show Errors Only" to filter to rows with validation issues
-5. Use "Show All Data" to revert to showing all rows
-6. Export processed data with the "Export Data" button
-7. Export error logs with the "Export Errors" button
+Usage
 
-## Mapping File Format
+Run the script to open the graphical interface
+Click "Load Files" to select your mapping and data files
+View processed data in the grid (validation errors highlighted in pink)
+Use "Show Errors Only" to filter to rows with validation issues
+Use "Show All Data" to revert to showing all rows
+Export processed data with the "Export Data" button
+Export error logs with the "Export Errors" button
 
+Mapping File Format
 The mapping file should be a CSV with the following columns:
-
-| Column | Description |
-| ------ | ----------- |
-| SourceField | Name of the field in the source data |
-| NewField | Name to use in the output (leave empty to keep original name) |
-| DataType | Data type for conversion (string, int, decimal, datetime) |
-| Mandatory | Y/N - whether the field is required |
-| Validation | Y/N - whether to validate the field |
-| ValidationRule | Regex pattern for validation |
-| Transformation | Y/N - whether to transform the field |
-| TransformFunction | Name of the transformation function to apply |
-
-## Example Mapping File
-
-```csv
-SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,Transformation,TransformFunction
-Title,BookTitle,string,Y,N,,N,
-Author,AuthorName,string,Y,N,,N,
-Barcode,,string,Y,Y,^\d{12}$,N,
-Pages,PageCount,int,N,Y,^\d+$,N,
-```
-
-## Data Processing
-
+ColumnDescriptionSourceFieldName of the field in the source dataNewFieldName to use in the output (leave empty to keep original name)DataTypeData type for conversion (string, int, decimal, datetime)MandatoryY/N - whether the field is requiredValidationY/N - whether to validate the fieldValidationRuleRegex pattern for validationErrorHandlingHow to handle validation errorsTransformationY/N - whether to transform the fieldTransformFunctionName of the transformation function to applyDefaultValueDefault value if error handling is set to Default
+Example Mapping File
+csvCopySourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling,Transformation,TransformFunction,DefaultValue
+Title,BookTitle,string,Y,N,,Error,N,,
+Author,AuthorName,string,Y,N,,Error,N,,
+Barcode,,string,Y,Y,^\d{12}$,Error,N,,
+Pages,PageCount,int,N,Y,^\d+$,Default,N,,0
+Data Processing
 The tool performs the following operations on the data:
 
-1. **Field Mapping**: Maps source fields to new field names if specified
-2. **Data Type Conversion**: Converts data to the specified type
-3. **Mandatory Field Validation**: Checks if required fields are present
-4. **Pattern Validation**: Validates data against regex patterns
-5. **Transformation**: Applies custom transformation functions
+Field Mapping: Maps source fields to new field names if specified
+Data Type Conversion: Converts data to the specified type
+Mandatory Field Validation: Checks if required fields are present
+Pattern Validation: Validates data against regex patterns
+Transformation: Applies custom transformation functions
 
-## Extending Transformations
-
-You can add custom transformation functions by editing the script. Each function should:
-
-1. Accept a single input value
-2. Return the transformed value
-3. Be registered in the `$global:TransformFunctions` hashtable
-
-Example transformation function:
-
-```powershell
-function GenderTransform($value) {
-    if ($value -match "Mr") { return "Male" }
-    elseif ($value -match "Mrs" -or $value -match "Miss") { return "Female" }
-    else { return "" }
-}
-
-$global:TransformFunctions = @{
-    "GenderTransform" = ${function:GenderTransform}
-}
-```
-
-Validation and Error Handling
 Validation Rule Examples
 The ValidationRule column in the mapping file accepts regular expression patterns. Here are common validation patterns for UK formats:
 Data TypeRegex PatternDescriptionEmail^[\w\.-]+@[\w\.-]+\.\w+$Validates email formatUK Phone`^(?:(?:+44\s?0)(?:1\d{8,9}Date (DD/MM/YYYY)`^(0[1-9][12][0-9]UK Postcode`^([A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}GIR ?0A{2})$`UK National Insurance^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$NI number formatUK VAT Number`^GB\d{9}$^GB\d{12}$`UK Company Number`^(SCNIUK Bank Sort Code^\d{2}-\d{2}-\d{2}$Format: 12-34-56UK Bank Account^\d{8}$8-digit account numberNumeric only^\d+$Only digits allowedPrice (£)^£\d+\.\d{2}$Format: £12.99ISBN^(?:ISBN(?:-13)?:?\s)?(?=[0-9X]{10}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$)ISBN formatURL^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$Web URLName^[a-zA-Z\s'-]+$Letters, spaces, hyphens, apostrophesUK Driving License^[A-Z]{5}\d{6}[A-Z]{2}\d[A-Z]{2}$UK driving license format
@@ -104,13 +62,30 @@ The ErrorHandling column in the mapping file specifies how validation errors sho
 OptionDescriptionWarningHighlights the cell, logs the error, but allows processing to continueErrorHighlights the cell, logs the error, and marks the record as invalidLogOnly logs the error without visual highlighting or affecting processingIgnoreValidation fails but no error is logged or displayedRejectThe entire record is rejected from processingNullError field is set to null/empty but record is processedDefaultError field is set to a default value (specified in DefaultValue column)
 Example of mapping file with error handling:
 csvCopySourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling,Transformation,TransformFunction,DefaultValue
-Title,BookTitle,string,Y,N,,,N,,
-Author,AuthorName,string,Y,N,,,N,,
+Title,BookTitle,string,Y,N,,Error,N,,
+Author,AuthorName,string,Y,N,,Error,N,,
 Barcode,,string,Y,Y,^\d{12}$,Error,N,,
 PostCode,,string,Y,Y,^([A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}|GIR ?0A{2})$,Warning,N,,
 Pages,PageCount,int,N,Y,^\d+$,Default,N,,0
 Email,,string,N,Y,^[\w\.-]+@[\w\.-]+\.\w+$,Log,N,,
 PublicationDate,,datetime,Y,Y,^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$,Null,N,,
+Extending Transformations
+You can add custom transformation functions by editing the script. Each function should:
+
+Accept a single input value
+Return the transformed value
+Be registered in the $global:TransformFunctions hashtable
+
+Example transformation function:
+powershellCopyfunction GenderTransform($value) {
+    if ($value -match "Mr") { return "Male" }
+    elseif ($value -match "Mrs" -or $value -match "Miss") { return "Female" }
+    else { return "" }
+}
+
+$global:TransformFunctions = @{
+    "GenderTransform" = ${function:GenderTransform}
+}
 Implementing Complex Validation
 For more complex validation that regex alone can't handle, you can create custom validation functions similar to transformation functions:
 powershellCopyfunction ValidateUKPostcode($value) {
@@ -176,26 +151,25 @@ SortCode,,string,Y,Y,^\d{2}-\d{2}-\d{2}$,Error
 AccountNumber,,string,Y,Y,^\d{8}$,Error
 TransactionDate,,datetime,Y,Y,^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$,Error
 VATNumber,,string,N,Y,^GB\d{9}$|^GB\d{12}$,Log
-By using these validation patterns and error handling options (including the Log option), you can ensure your data meets quality requirements while providing appropriate feedback for different types of validation issues, with formats specifically tailored for UK 
-
-## Logging
-
+Logging
 The tool provides detailed logging of:
-- Loaded mapping and data files
-- Validation errors with specific details
-- Transformation summaries including affected fields and records
-- Row and column counts
 
-## Implementation Details
+Loaded mapping and data files
+Validation errors with specific details
+Transformation summaries including affected fields and records
+Row and column counts
 
+Implementation Details
 The tool is built using:
-- PowerShell scripting language
-- Windows Forms for the GUI
-- .NET Framework classes for data manipulation
-- Regular expressions for validation
+
+PowerShell scripting language
+Windows Forms for the GUI
+.NET Framework classes for data manipulation
+Regular expressions for validation
 
 The main components are:
-- Form layout with resizable panels
-- DataGridView for data display with row numbers
-- Support for row and column selection
-- Alternating row colors and error cell highlighting
+
+Form layout with resizable panels
+DataGridView for data display with row numbers
+Support for row and column selection
+Alternating row colors and error cell highlighting
