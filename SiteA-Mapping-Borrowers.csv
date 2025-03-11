@@ -1,0 +1,2 @@
+SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling,Transformation,TransformFunction
+Title,Gender,String,N,Y,^(Male|Female)$,Log,Y,GenderTransform
