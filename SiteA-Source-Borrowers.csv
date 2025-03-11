@@ -1,0 +1,11 @@
+BorrowerId,Name,Title,DateOfBirth,Email,Phone,Address,MembershipType,MembershipStartDate,OverdueCount
+B001,John Doe,Mr,01/01/1990,john.doe@example.com,1234567,123 Main Rd,Regular,2020-01-01,0
+B002,Jane Smith,Mrs,01/02/1987,jane.smith@example.com,1234567,456 Oak Ave,Premium,2019-03-15,1
+B003,Alice Johnson,Miss,01/03/1993,alice.j@example.com,1234567,789 Pine Rd,Regular,2021-07-10,0
+B004,Bob Brown,Mr,01/04/1989,bob.brown@example.com,1234567,321 Elm St,Regular,2022-04-01,2
+B005,Eve Davis,Dr,01/05/1991,eve.d@example.com,1234567,654 Maple Dr,Premium,2018-09-05,0
+B006,Tom Clark,Mr,01/06/1970,tom.clark@example.com,1234567,987 Cedar Ln,Regular,2020-12-12,0
+B007,Lucy Green,Mrs,01/07/1974,lucy.green@example.com,1234567,159 Birch Blvd,Premium,2017-06-06,3
+B008,Mark White,Mr,01/08/1990,mark.white@example.com,1234567,753 Walnut Way,Regular,2019-11-11,1
+B009,Daisy Blue,Miss,01/09/1995,daisy.blue@example.com,1234567,357 Spruce Rd,Regular,2021-01-20,0
+B010,Sam Black,Mr,01/10/1999,sam.black@example.com,1234567,246 Redwood St,Premium,2022-02-14,2
