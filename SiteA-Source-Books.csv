@@ -1,0 +1,11 @@
+Title,Author,Genre,Barcode,Publisher,PublicationDate,Pages,Language,Format,Location
+The Great Gatsby,F. Scott Fitzgerald,Fiction,123456789012,Scribner,1925-04-10,218,English,Hardcover,Shelf A1
+1984,George Orwell,Dystopian,123456789013,Secker & Warburg,1949-06-08,328,English,Paperback,Shelf B2
+Moby Dick,Herman Melville,Adventure,ABCDEFGHIJKL,Harper & Brothers,1851-10-18,635,English,Hardcover,Shelf C3
+Pride and Prejudice,Jane Austen,Romance,12345678901,T. Egerton,1813-01-28,432,English,Paperback,Shelf D4
+To Kill a Mockingbird,Harper Lee,Fiction,123456789014,J. B. Lippincott & Co.,1960-07-11,281,English,Hardcover,Shelf E5
+The Catcher in the Rye,J.D. Salinger,Fiction,123456789015,Little Brown and Company,1951-07-16,277,English,Paperback,Shelf F6
+War and Peace,Leo Tolstoy,Historical,123456789016,The Russian Messenger,1869-01-01,1225,Russian,Hardcover,Shelf G7
+Ulysses,James Joyce,Modernist,123456789017,Shakespeare and Company,1922-02-02,730,English,Paperback,Shelf H8
+The Odyssey,Homer,Epic,123456789018,Penguin Classics,-800-01-01,541,English,Paperback,Shelf I9
+Crime and Punishment,Fyodor Dostoevsky,Psychological,123456789019,The Russian Messenger,1866-01-01,430,Russian,Hardcover,Shelf J10
