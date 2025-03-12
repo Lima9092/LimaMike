@@ -1,5 +1,22 @@
 # Simple Library Data Transformation Tool
-# With row numbers, alternating colors, and proper error highlighting
+
+# Minimize the PowerShell command prompt
+Add-Type @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class Win32 {
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        [DllImport("kernel32.dll", ExactSpelling = true)]
+        public static extern IntPtr GetConsoleWindow();
+    }
+"@
+$consolePtr = [Win32]::GetConsoleWindow()
+if ($consolePtr -ne [IntPtr]::Zero) {
+    # 6 = Minimize the window
+    [Win32]::ShowWindow($consolePtr, 6)
+}
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
