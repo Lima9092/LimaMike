@@ -20,8 +20,13 @@ This tool provides a graphical interface for:
 - **Data Mapping**: Define source and target field names, mandatory fields, data types, and validation rules
 - **Data Validation**: Validate data against regex patterns with visual error highlighting
 - **Data Transformation**: Apply custom transformation functions to data fields
-- **Visual Interface**: View data in a grid with alternating row colors and error highlighting
-- **Filtering**: Show only rows with validation errors
+- **Visual Interface**: View data in a grid with alternating row colors, row numbers, and error highlighting
+- **Filtering**: 
+  - Show only rows with validation errors
+  - Show only mapped fields
+- **Column Ordering**:
+  - Sort by original data file column order
+  - Sort by mapping file column order
 - **Export**: Export processed data and error logs to CSV files
 
 ## Requirements
@@ -35,9 +40,12 @@ This tool provides a graphical interface for:
 2. Click "Load Files" to select your mapping and data files
 3. View processed data in the grid (validation errors highlighted in pink)
 4. Use "Show Errors Only" to filter to rows with validation issues
-5. Use "Show All Data" to revert to showing all rows
-6. Export processed data with the "Export Data" button
-7. Export error logs with the "Export Errors" button
+5. Use "Show Mapped Only" to display only fields specified in mapping
+6. Use "Show All Data" to revert to showing all rows and fields
+7. Use "Sort by Data" to arrange columns in original CSV order
+8. Use "Sort by Mapping" to arrange columns in mapping file order
+9. Export processed data with the "Export Data" button
+10. Export error logs with the "Export Errors" button
 
 ## Mapping File Format
 
@@ -54,8 +62,6 @@ The mapping file should be a CSV with the following columns:
 | Transformation | Y/N - whether to transform the field |
 | TransformFunction | Name of the transformation function to apply | 
 
-I'll expand the Data Processing section to provide more detailed information about the data conversion functionality:
-
 ## Data Processing
 
 The tool processes data through several steps:
@@ -64,6 +70,7 @@ The tool processes data through several steps:
 - Maps source fields to new field names if specified in the `NewField` column
 - If `NewField` is empty, the original `SourceField` name is retained
 - Example: "Title" field becomes "BookTitle" if specified in mapping
+- The tool preserves a map of field name changes for consistent column ordering
 
 ### 2. Data Type Conversion
 - Converts data values to the specified type in the `DataType` column
@@ -86,7 +93,9 @@ The tool processes data through several steps:
 ### 3. Mandatory Field Validation
 - Checks if required fields (marked with `Mandatory` = "Y") are present
 - Reports an error if a mandatory field is empty or null
-- Example error: "Row 2 Field 'Title': Mandatory field missing"
+- Example error: "Row 2 Field 'Title': Mandatory field missing (original value)"
+- Also checks if values are empty after transformation with improved error messages
+- Detects and reports completely missing mandatory fields in source data
 
 ### 4. Pattern Validation
 - Validates data against regex patterns in the `ValidationRule` column
@@ -116,6 +125,27 @@ The tool processes data through several steps:
 5. Display error cells in pink
 6. Log transformations applied to the data
 
+### Column Ordering
+
+The tool now supports two different column ordering options:
+
+1. **Data File Order** (default): 
+   - Maintains the original column order from the source CSV
+   - Translates field names according to mapping
+   - Preserves user's expected order of fields
+
+2. **Mapping File Order**:
+   - Orders columns according to the order they appear in the mapping file
+   - Useful when a specific output order is required
+   - Fields not in mapping appear at the end
+
+### Error Highlighting
+
+- Error cells are highlighted in pink in the grid
+- Row numbers clearly show which rows contain errors
+- Detailed error messages are displayed in the log
+- Export all errors to CSV for documentation
+
 ### Examples
 
 **Input CSV:**
@@ -142,13 +172,6 @@ PublishDate,PublicationDate,datetime,Y,Y,,,N,
 - All mandatory fields are checked for values
 
 The tool provides a complete audit trail of the processing through the log panel, showing which fields were transformed and any validation errors encountered.
-The tool performs the following operations on the data:
-
-1. **Field Mapping**: Maps source fields to new field names if specified
-2. **Data Type Conversion**: Converts data to the specified type
-3. **Mandatory Field Validation**: Checks if required fields are present
-4. **Pattern Validation**: Validates data against regex patterns
-5. **Transformation**: Applies custom transformation functions
 
 ## Validation Rule Examples
 
@@ -290,13 +313,28 @@ TransactionDate,,datetime,Y,Y,^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$
 VATNumber,,string,N,Y,^GB\d{9}$|^GB\d{12}$,Log
 ```
 
+## User Interface Improvements
+
+The latest version includes several UI enhancements:
+
+- **Clear layout**: Improved organization with proper panel placement
+- **Row numbers**: Easy identification of data rows in the grid
+- **Alternating row colors**: Better visual separation of rows
+- **Error highlighting**: Clear visual indication of validation issues
+- **Column headers**: Improved styling and click behavior for selection
+- **Resizable panels**: Adjust data and log panel sizes as needed
+- **Better error handling**: Graceful handling of display errors
+
 ## Logging
 
 The tool provides detailed logging of:
 - Loaded mapping and data files
+- Field name translations 
+- Original column orders from both data and mapping
 - Validation errors with specific details
 - Transformation summaries including affected fields and records
 - Row and column counts
+- Error details and locations
 
 ## Implementation Details
 
@@ -311,3 +349,5 @@ The main components are:
 - DataGridView for data display with row numbers
 - Support for row and column selection
 - Alternating row colors and error cell highlighting
+- Comprehensive logging system
+- CSV parsing with support for quoted fields
