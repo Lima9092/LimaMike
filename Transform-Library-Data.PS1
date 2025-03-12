@@ -31,23 +31,51 @@ $global:UseMappingOrder = $false
 $global:OriginalColumnOrder = @()
 $global:MappingColumnOrder = @()
 $global:LogData = @()
-$global:SourceToNewFieldMap = @{}  # Added to track field name changes
+$global:SourceToNewFieldMap = @{}  # Will store arrays of mappings
 
-# Transformation function
+# Transformation functions
 function GenderTransform($value) {
     if ($value -match "Mr") { return "Male" }
     elseif ($value -match "Mrs" -or $value -match "Miss") { return "Female" }
     else { return "" }
 }
 
-$global:TransformFunctions = @{
-    "GenderTransform" = ${function:GenderTransform}
+function BorrowerTypeTransform($value) {
+    if ($value -match "^[A-Za-z][0-9]{4}[A-Za-z]{2}$") { 
+        return "Student" 
+    } else { 
+        return "Teacher" 
+    }
 }
+
+# Create function hashtable differently
+$global:TransformFunctions = @{}
+$global:TransformFunctions["GenderTransform"] = ${function:GenderTransform}
+$global:TransformFunctions["BorrowerTypeTransform"] = ${function:BorrowerTypeTransform}
 
 # Load mapping file
 function Load-Mapping($path) {
     try {
         $mapping = Import-Csv -Path $path
+        
+        # Track fields with multiple mappings for logging
+        $fieldCount = @{}
+        foreach ($m in $mapping) {
+            if (-not [string]::IsNullOrEmpty($m.SourceField)) {
+                if (-not $fieldCount.ContainsKey($m.SourceField)) {
+                    $fieldCount[$m.SourceField] = 0
+                }
+                $fieldCount[$m.SourceField]++
+            }
+        }
+        
+        # Log multiple mappings
+        foreach ($field in $fieldCount.Keys) {
+            if ($fieldCount[$field] -gt 1) {
+                Write-Host "Field '$field' has $($fieldCount[$field]) mappings"
+            }
+        }
+        
         return $mapping
     } catch {
         [System.Windows.Forms.MessageBox]::Show("Error loading mapping file: $_")
@@ -101,7 +129,10 @@ function Process-Data($data, $mapping) {
 	$global:SourceToNewFieldMap.Clear()
 	foreach ($m in $mapping) {
 		if (-not [string]::IsNullOrEmpty($m.SourceField) -and -not [string]::IsNullOrEmpty($m.NewField)) {
-			$global:SourceToNewFieldMap[$m.SourceField] = $m.NewField
+            if (-not $global:SourceToNewFieldMap.ContainsKey($m.SourceField)) {
+                $global:SourceToNewFieldMap[$m.SourceField] = @()
+            }
+            $global:SourceToNewFieldMap[$m.SourceField] += $m.NewField
 		}
 	}
     
@@ -110,9 +141,13 @@ function Process-Data($data, $mapping) {
         $global:MappingColumnOrder = @()
         foreach ($m in $mapping) {
             if (-not [string]::IsNullOrEmpty($m.NewField)) {
-                $global:MappingColumnOrder += $m.NewField
+                if ($global:MappingColumnOrder -notcontains $m.NewField) {
+                    $global:MappingColumnOrder += $m.NewField
+                }
             } elseif (-not [string]::IsNullOrEmpty($m.SourceField)) {
-                $global:MappingColumnOrder += $m.SourceField
+                if ($global:MappingColumnOrder -notcontains $m.SourceField) {
+                    $global:MappingColumnOrder += $m.SourceField
+                }
             }
         }
     }
@@ -121,7 +156,10 @@ function Process-Data($data, $mapping) {
     $mapLookup = @{}
     foreach ($m in $mapping) {
         if (-not [string]::IsNullOrEmpty($m.SourceField)) {
-            $mapLookup[$m.SourceField] = $m
+            if (-not $mapLookup.ContainsKey($m.SourceField)) {
+                $mapLookup[$m.SourceField] = @()
+            }
+            $mapLookup[$m.SourceField] += $m
         }
     }
     
@@ -146,73 +184,78 @@ function Process-Data($data, $mapping) {
             
             # Check if this field is in our mapping
             if ($mapLookup.ContainsKey($sourceField)) {
-                $map = $mapLookup[$sourceField]
-                $dataType = $map.DataType
-                $mandatory = $map.Mandatory -eq "Y"
-                $doValidation = $map.Validation -eq "Y"
-                $validationRule = $map.ValidationRule
-                $doTransform = $map.Transformation -eq "Y"
-                $transformFunction = $map.TransformFunction
-                $error = $null
-                
-                # Track that we've processed this field
-                $processedFields[$sourceField] = $true
+                # Process all mappings for this source field
+                foreach ($map in $mapLookup[$sourceField]) {
+                    $dataType = $map.DataType
+                    $mandatory = $map.Mandatory -eq "Y"
+                    $doValidation = $map.Validation -eq "Y"
+                    $validationRule = $map.ValidationRule
+                    $doTransform = $map.Transformation -eq "Y"
+                    $transformFunction = $map.TransformFunction
+                    $error = $null
+                    
+                    # Track that we've processed this field
+                    $processedFields[$sourceField] = $true
 
-                # Store original value before transformation for mandatory check
-                $originalValue = $value
-                
-                # Apply transformation
-                if ($doTransform -and $transformFunction -and $global:TransformFunctions.ContainsKey($transformFunction)) {
-                    try {
-                        $value = & $global:TransformFunctions[$transformFunction] $value
-                    } catch {
-                        $error = "Error in transformation: $_"
-                    }
-                }
-                
-                # Mandatory check - check BOTH original and transformed values
-                # This ensures we catch empty values even after transformation
-                if ($mandatory) {
-                    if ([string]::IsNullOrEmpty($originalValue)) {
-                        $error = "Mandatory field missing (original value)"
-                    } elseif ([string]::IsNullOrEmpty($value)) {
-                        $error = "Mandatory field empty after transformation"
-                    }
-                }
-                
-                # Type conversion
-                if ($dataType -and $value -ne $null -and $value -ne "") {
-                    try {
-                        switch ($dataType.ToLower()) {
-                            "int" { $value = [int]$value }
-                            "decimal" { $value = [decimal]$value }
-                            "datetime" { $value = [datetime]$value }
-                            default { }
+                    # Store original value before transformation for mandatory check
+                    $originalValue = $value
+                    
+                    # Make a copy of the value for this mapping instance
+                    $mappedValue = $value
+                    
+                    # Apply transformation
+                    if ($doTransform -and $transformFunction -and $global:TransformFunctions.ContainsKey($transformFunction)) {
+                        try {
+                            $mappedValue = & $global:TransformFunctions[$transformFunction] $mappedValue
+                        } catch {
+                            $error = "Error in transformation: $_"
                         }
-                    } catch {
-                        $error = "Data type conversion failed for $dataType"
                     }
-                }
-                
-                # Validation
-                if ($doValidation -and $value -ne $null -and $value -ne "" -and $validationRule) {
-                    if (-not ($value -match $validationRule)) {
-                        $error = "Validation failed for rule $validationRule"
+                    
+                    # Mandatory check - check BOTH original and transformed values
+                    # This ensures we catch empty values even after transformation
+                    if ($mandatory) {
+                        if ([string]::IsNullOrEmpty($originalValue)) {
+                            $error = "Mandatory field missing (original value)"
+                        } elseif ([string]::IsNullOrEmpty($mappedValue)) {
+                            $error = "Mandatory field empty after transformation"
+                        }
                     }
-                }
+                    
+                    # Type conversion
+                    if ($dataType -and $mappedValue -ne $null -and $mappedValue -ne "") {
+                        try {
+                            switch ($dataType.ToLower()) {
+                                "int" { $mappedValue = [int]$mappedValue }
+                                "decimal" { $mappedValue = [decimal]$mappedValue }
+                                "datetime" { $mappedValue = [datetime]$mappedValue }
+                                default { }
+                            }
+                        } catch {
+                            $error = "Data type conversion failed for $dataType"
+                        }
+                    }
+                    
+                    # Validation
+                    if ($doValidation -and $mappedValue -ne $null -and $mappedValue -ne "" -and $validationRule) {
+                        if (-not ($mappedValue -match $validationRule)) {
+                            $error = "Validation failed for rule $validationRule"
+                        }
+                    }
 
-                # Use the mapped field name
-                $newField = $map.NewField
-                if ([string]::IsNullOrEmpty($newField)) {
-                    $newField = $sourceField
-                }
-                
-                $newRow[$newField] = $value
+                    # Use the mapped field name
+                    $newField = $map.NewField
+                    if ([string]::IsNullOrEmpty($newField)) {
+                        $newField = $sourceField
+                    }
+                    
+                    $newRow[$newField] = $mappedValue
 
-                # Record errors
-                if ($error) {
-                    $log += "Row $($i+1) Field '$sourceField': $error"
-                    $global:ErrorCells["$i-$newField"] = $error
+                    # Record errors
+                    if ($error) {
+                        $log += "Row $($i+1) Field '$sourceField' (mapped to '$newField'): $error"
+                        $global:ErrorCells["$i-$newField"] = $error
+                    }
                 }
             }
             else {
@@ -227,16 +270,17 @@ function Process-Data($data, $mapping) {
         foreach ($mandatoryField in $mandatoryFields.Keys) {
             if (-not $processedFields.ContainsKey($mandatoryField)) {
                 # This mandatory field wasn't in the input data
-                $map = $mapLookup[$mandatoryField]
-                $newField = if (-not [string]::IsNullOrEmpty($map.NewField)) { $map.NewField } else { $mandatoryField }
-                
-                # Add empty value to output
-                $newRow[$newField] = ""
-                
-                # Record the error
-                $error = "Required field '$mandatoryField' is missing from input data"
-                $log += "Row $($i+1): $error"
-                $global:ErrorCells["$i-$newField"] = $error
+                foreach ($map in $mapLookup[$mandatoryField]) {
+                    $newField = if (-not [string]::IsNullOrEmpty($map.NewField)) { $map.NewField } else { $mandatoryField }
+                    
+                    # Add empty value to output
+                    $newRow[$newField] = ""
+                    
+                    # Record the error
+                    $error = "Required field '$mandatoryField' is missing from input data"
+                    $log += "Row $($i+1): $error"
+                    $global:ErrorCells["$i-$newField"] = $error
+                }
             }
         }
         
@@ -475,16 +519,6 @@ function Load-Files {
     $global:ErrorCells.Clear()
     $txtLog.Text = "Starting file loading process..."
 
-	# Build the source-to-new field map for column naming
-	$global:SourceToNewFieldMap.Clear()
-	foreach ($m in $mapping) {
-		if (-not [string]::IsNullOrEmpty($m.SourceField) -and -not [string]::IsNullOrEmpty($m.NewField)) {
-			$global:SourceToNewFieldMap[$m.SourceField] = $m.NewField
-			$txtLog.Text += "`r`nField mapping: '$($m.SourceField)' => '$($m.NewField)'"
-		}
-	}
-	$txtLog.Text += "`r`nTotal field mappings: $($global:SourceToNewFieldMap.Count)"
-    
     # Clear the grid
     $grid.DataSource = $null
     $grid.Rows.Clear()
@@ -513,6 +547,29 @@ function Load-Files {
     
     $global:Mapping = $mapping
     $txtLog.Text += "`r`nLoaded mapping with $($mapping.Count) row(s)"
+    
+    # Build the source-to-new field map for column naming
+    $global:SourceToNewFieldMap.Clear()
+    foreach ($m in $mapping) {
+        if (-not [string]::IsNullOrEmpty($m.SourceField) -and -not [string]::IsNullOrEmpty($m.NewField)) {
+            if (-not $global:SourceToNewFieldMap.ContainsKey($m.SourceField)) {
+                $global:SourceToNewFieldMap[$m.SourceField] = @()
+            }
+            $global:SourceToNewFieldMap[$m.SourceField] += $m.NewField
+            $txtLog.Text += "`r`nField mapping: '$($m.SourceField)' => '$($m.NewField)'"
+        }
+    }
+    
+    # Count source fields with multiple mappings
+    $multiMappedFields = 0
+    foreach ($sourceField in $global:SourceToNewFieldMap.Keys) {
+        if ($global:SourceToNewFieldMap[$sourceField].Count -gt 1) {
+            $multiMappedFields++
+            $txtLog.Text += "`r`nMulti-mapped field: '$sourceField' => " + ($global:SourceToNewFieldMap[$sourceField] -join ", ")
+        }
+    }
+    
+    $txtLog.Text += "`r`nTotal source fields with mappings: $($global:SourceToNewFieldMap.Count) (including $multiMappedFields with multiple mappings)"
     
     # Additional debug information 
     $txtLog.Text += "`r`nOriginal column order from CSV: $($global:OriginalColumnOrder -join ', ')"
@@ -573,7 +630,7 @@ function Load-Files {
         $firstRow = $global:ProcessedData[0]
         $columns = $firstRow.PSObject.Properties.Name
         
-        $txtLog.Text += "`r`nDetected columns: $($columns -join ', ')"
+        $txtLog.Text += "`r`nDetected columns in processed data: $($columns -join ', ')"
         
         # Use the Update-GridView function to populate the grid
         Update-GridView
@@ -582,15 +639,21 @@ function Load-Files {
         
         # Enhanced transformation reporting
         $transformFields = @()
+        $generatedFields = @()
         $transformRecordCount = 0
         $transformedRecords = @{}
         
-        # Collect information about transforms
+        # Collect information about transforms and field generation
         foreach ($m in $global:Mapping) {
             if ($m.Transformation -eq "Y") {
                 $transformFields += $m.SourceField
                 
-                # Count records that had this transformation applied
+                # Track if this creates a new field
+                if (-not [string]::IsNullOrEmpty($m.NewField) -and $m.NewField -ne $m.SourceField) {
+                    $generatedFields += $m.NewField
+                }
+                
+                # Count records with transformations
                 $sourceField = $m.SourceField
                 $targetField = if (-not [string]::IsNullOrEmpty($m.NewField)) { $m.NewField } else { $sourceField }
                 
@@ -611,6 +674,14 @@ function Load-Files {
             foreach ($field in $transformFields) {
                 $txtLog.Text += "`r`n - $field"
             }
+            
+            if ($generatedFields.Count -gt 0) {
+                $txtLog.Text += "`r`nGenerated $($generatedFields.Count) new fields through transformation:"
+                foreach ($field in $generatedFields) {
+                    $txtLog.Text += "`r`n - $field"
+                }
+            }
+            
             $txtLog.Text += "`r`nTransformations affected $transformRecordCount out of $($global:ProcessedData.Count) records."
         }
     } else {
