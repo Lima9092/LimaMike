@@ -8,7 +8,13 @@ Add-Type -AssemblyName System.Drawing
 $global:ErrorCells = @{}
 $global:Mapping = $null
 $global:ProcessedData = $null
+$global:RawData = $null
+$global:ShowOnlyMappedFields = $false
+$global:UseMappingOrder = $false
+$global:OriginalColumnOrder = @()
+$global:MappingColumnOrder = @()
 $global:LogData = @()
+$global:SourceToNewFieldMap = @{}  # Added to track field name changes
 
 # Transformation function
 function GenderTransform($value) {
@@ -35,6 +41,30 @@ function Load-Mapping($path) {
 # Load data file
 function Load-Data($path) {
     try {
+        # Read the raw CSV file first to get the real column order
+        $rawContent = Get-Content -Path $path -Raw
+        $headerLine = $rawContent.Split("`n")[0].Trim()
+        
+        # Process the header line to handle quoted column names
+        $quotedColumnPattern = '(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^,"]*))'
+        $matches = [regex]::Matches($headerLine, $quotedColumnPattern)
+        $global:OriginalColumnOrder = @()
+        
+        foreach ($match in $matches) {
+            $columnName = if ($match.Groups[1].Success) { 
+                # Handle quoted values (and double-quotes inside quotes)
+                $match.Groups[1].Value.Replace('""', '"') 
+            } else { 
+                # Handle non-quoted values
+                $match.Groups[2].Value 
+            }
+            $global:OriginalColumnOrder += $columnName
+        }
+        
+        # Log detected column order for debugging
+        Write-Host "Original CSV columns: $($global:OriginalColumnOrder -join ', ')"
+        
+        # Now load with Import-CSV
         $data = Import-Csv -Path $path
         return $data
     } catch {
@@ -48,6 +78,27 @@ function Process-Data($data, $mapping) {
     $result = @()
     $log = @()
     $global:ErrorCells.Clear()  # Clear error cells before processing
+    $global:RawData = $data  # Store raw data for reference
+	
+	# Make sure field mappings are captured
+	$global:SourceToNewFieldMap.Clear()
+	foreach ($m in $mapping) {
+		if (-not [string]::IsNullOrEmpty($m.SourceField) -and -not [string]::IsNullOrEmpty($m.NewField)) {
+			$global:SourceToNewFieldMap[$m.SourceField] = $m.NewField
+		}
+	}
+    
+    # Capture original column order when loading mapping
+    if ($mapping.Count -gt 0) {
+        $global:MappingColumnOrder = @()
+        foreach ($m in $mapping) {
+            if (-not [string]::IsNullOrEmpty($m.NewField)) {
+                $global:MappingColumnOrder += $m.NewField
+            } elseif (-not [string]::IsNullOrEmpty($m.SourceField)) {
+                $global:MappingColumnOrder += $m.SourceField
+            }
+        }
+    }
 
     # Create lookup dictionary from mapping
     $mapLookup = @{}
@@ -148,8 +199,10 @@ function Process-Data($data, $mapping) {
                 }
             }
             else {
-                # Pass through unmapped fields
-                $newRow[$sourceField] = $value
+                # Pass through unmapped fields (only if we're not in mapped-fields-only mode)
+                if (-not $global:ShowOnlyMappedFields) {
+                    $newRow[$sourceField] = $value
+                }
             }
         }
         
@@ -201,8 +254,7 @@ $form.Controls.Add($tableLayout)
 $buttonPanel = New-Object System.Windows.Forms.Panel
 $buttonPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
 $tableLayout.Controls.Add($buttonPanel, 0, 0)
-
-# Buttons - fixed positioning
+# Buttons with corrected positioning
 $btnLoadFiles = New-Object System.Windows.Forms.Button
 $btnLoadFiles.Text = "Load Files"
 $btnLoadFiles.Width = 120
@@ -215,22 +267,40 @@ $btnFilter.Width = 120
 $btnFilter.Location = New-Object System.Drawing.Point(140, 10)
 $buttonPanel.Controls.Add($btnFilter)
 
+$btnMappedOnly = New-Object System.Windows.Forms.Button
+$btnMappedOnly.Text = "Show Mapped Only"
+$btnMappedOnly.Width = 120
+$btnMappedOnly.Location = New-Object System.Drawing.Point(270, 10)
+$buttonPanel.Controls.Add($btnMappedOnly)
+
 $btnReset = New-Object System.Windows.Forms.Button
 $btnReset.Text = "Show All Data"
 $btnReset.Width = 120
-$btnReset.Location = New-Object System.Drawing.Point(270, 10)
+$btnReset.Location = New-Object System.Drawing.Point(400, 10)
 $buttonPanel.Controls.Add($btnReset)
+
+$btnSortByData = New-Object System.Windows.Forms.Button
+$btnSortByData.Text = "Sort by Data"
+$btnSortByData.Width = 120
+$btnSortByData.Location = New-Object System.Drawing.Point(530, 10)
+$buttonPanel.Controls.Add($btnSortByData)
+
+$btnSortByMapping = New-Object System.Windows.Forms.Button
+$btnSortByMapping.Text = "Sort by Mapping"
+$btnSortByMapping.Width = 120
+$btnSortByMapping.Location = New-Object System.Drawing.Point(660, 10)
+$buttonPanel.Controls.Add($btnSortByMapping)
 
 $btnExport = New-Object System.Windows.Forms.Button
 $btnExport.Text = "Export Data"
 $btnExport.Width = 120
-$btnExport.Location = New-Object System.Drawing.Point(400, 10)
+$btnExport.Location = New-Object System.Drawing.Point(790, 10)
 $buttonPanel.Controls.Add($btnExport)
 
 $btnExportErrors = New-Object System.Windows.Forms.Button
 $btnExportErrors.Text = "Export Errors"
 $btnExportErrors.Width = 120
-$btnExportErrors.Location = New-Object System.Drawing.Point(530, 10)
+$btnExportErrors.Location = New-Object System.Drawing.Point(920, 10)
 $buttonPanel.Controls.Add($btnExportErrors)
 
 # Add a split container in the second row for grid and log
@@ -267,6 +337,18 @@ $grid.RowHeadersVisible = $true
 $grid.ColumnHeadersVisible = $true
 $grid.EnableHeadersVisualStyles = $false
 $grid.ColumnHeadersHeight = 30
+$grid.DefaultCellStyle.NullValue = ""  # Display empty string for null values
+
+# Handle data error events to prevent exceptions from being shown to the user
+$grid.Add_DataError({
+    param($sender, $e)
+    
+    # Log the error quietly instead of showing the default error dialog
+    $txtLog.AppendText("`r`nGrid display error in cell [Row $($e.RowIndex), Column $($e.ColumnIndex)]: $($e.Exception.Message)")
+    
+    # Tell the grid that we've handled the error
+    $e.ThrowException = $false
+})
 
 # Change header text color to black
 $grid.ColumnHeadersDefaultCellStyle.BackColor = [System.Drawing.Color]::LightGray
@@ -375,6 +457,16 @@ $grid.Add_CellFormatting({
 function Load-Files {
     $global:ErrorCells.Clear()
     $txtLog.Text = "Starting file loading process..."
+
+	# Build the source-to-new field map for column naming
+	$global:SourceToNewFieldMap.Clear()
+	foreach ($m in $mapping) {
+		if (-not [string]::IsNullOrEmpty($m.SourceField) -and -not [string]::IsNullOrEmpty($m.NewField)) {
+			$global:SourceToNewFieldMap[$m.SourceField] = $m.NewField
+			$txtLog.Text += "`r`nField mapping: '$($m.SourceField)' => '$($m.NewField)'"
+		}
+	}
+	$txtLog.Text += "`r`nTotal field mappings: $($global:SourceToNewFieldMap.Count)"
     
     # Clear the grid
     $grid.DataSource = $null
@@ -404,6 +496,20 @@ function Load-Files {
     
     $global:Mapping = $mapping
     $txtLog.Text += "`r`nLoaded mapping with $($mapping.Count) row(s)"
+    
+    # Additional debug information 
+    $txtLog.Text += "`r`nOriginal column order from CSV: $($global:OriginalColumnOrder -join ', ')"
+    
+    # Extract column order from mapping
+    $global:MappingColumnOrder = @()
+    foreach ($m in $mapping) {
+        $fieldName = if (-not [string]::IsNullOrEmpty($m.NewField)) { $m.NewField } else { $m.SourceField }
+        if (-not [string]::IsNullOrEmpty($fieldName) -and $global:MappingColumnOrder -notcontains $fieldName) {
+            $global:MappingColumnOrder += $fieldName
+        }
+    }
+    
+    $txtLog.Text += "`r`nMapping column order: $($global:MappingColumnOrder -join ', ')"
     
     # Select Data CSV
     $openFileDialog.Title = "Select Data CSV File"
@@ -452,58 +558,8 @@ function Load-Files {
         
         $txtLog.Text += "`r`nDetected columns: $($columns -join ', ')"
         
-        # Create columns with compatible sort mode
-        foreach ($colName in $columns) {
-            $column = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
-            $column.HeaderText = $colName
-            $column.Name = $colName
-            $column.Width = 120
-            $column.SortMode = [System.Windows.Forms.DataGridViewColumnSortMode]::NotSortable  # No automatic sorting
-            $grid.Columns.Add($column)
-        }
-        
-        # Add rows manually with alternating colors
-        for ($rowIdx = 0; $rowIdx -lt $global:ProcessedData.Count; $rowIdx++) {
-            $rowObj = $global:ProcessedData[$rowIdx]
-            
-            # Add new row
-            $grid.Rows.Add() | Out-Null
-            $currentRow = $grid.Rows[$grid.Rows.Count - 1]
-            
-            # Set alternating row color
-            if ($rowIdx % 2 -eq 1) {
-                $currentRow.DefaultCellStyle.BackColor = [System.Drawing.Color]::AliceBlue
-            }
-            
-            # Add cell values
-            for ($colIdx = 0; $colIdx -lt $columns.Count; $colIdx++) {
-                $colName = $columns[$colIdx]
-                $currentRow.Cells[$colIdx].Value = $rowObj.$colName
-            }
-        }
-        
-        # Mark error cells without duplicating error messages in log
-        foreach ($key in $global:ErrorCells.Keys) {
-            $parts = $key -split "-"
-            if ($parts.Count -eq 2) {
-                $rowIndex = [int]$parts[0]
-                $colName = $parts[1]
-                
-                # Find column index
-                $colIndex = -1
-                for ($i = 0; $i -lt $grid.Columns.Count; $i++) {
-                    if ($grid.Columns[$i].Name -eq $colName) {
-                        $colIndex = $i
-                        break
-                    }
-                }
-                
-                # Set cell background to pink if found
-                if ($rowIndex -lt $grid.Rows.Count -and $colIndex -ge 0) {
-                    $grid.Rows[$rowIndex].Cells[$colIndex].Style.BackColor = [System.Drawing.Color]::LightPink
-                }
-            }
-        }
+        # Use the Update-GridView function to populate the grid
+        Update-GridView
         
         $txtLog.Text += "`r`nData loaded successfully. Found $($global:ProcessedData.Count) records."
         
@@ -572,16 +628,64 @@ function Show-ErrorsOnly {
     $txtLog.Text += "`r`nShowing only rows with errors."
 }
 
+# Filter to show only mapped fields
+function Show-MappedOnly {
+    $txtLog.Text += "`r`nFiltering to show only fields specified in the mapping..."
+    
+    if ($null -eq $global:Mapping -or $global:Mapping.Count -eq 0) {
+        $txtLog.Text += "`r`nNo mapping loaded. Nothing to filter."
+        return
+    }
+    
+    # Set flag for showing only mapped fields
+    $global:ShowOnlyMappedFields = $true
+    
+    # Re-process data to only include mapped fields
+    if ($global:RawData -and $global:Mapping) {
+        try {
+            $result = Process-Data $global:RawData $global:Mapping
+            $global:ProcessedData = $result.Data
+            
+            # Update the grid
+            Update-GridView
+            
+            $txtLog.Text += "`r`nShowing only mapped fields."
+        } catch {
+            $txtLog.Text += "`r`nError reprocessing data: $_"
+        }
+    } else {
+        $txtLog.Text += "`r`nNo data loaded to reprocess."
+    }
+}
+
 # Show all rows
 function Show-AllData {
     $txtLog.Text += "`r`nShowing all rows..."
+    
+    # Reset mapped fields only flag
+    $global:ShowOnlyMappedFields = $false
     
     # Make all rows visible
     for ($i = 0; $i -lt $grid.Rows.Count; $i++) {
         $grid.Rows[$i].Visible = $true
     }
     
-    $txtLog.Text += "`r`nAll rows are now visible."
+    # If we have raw data, reprocess to show all fields
+    if ($global:RawData -and $global:Mapping) {
+        try {
+            $result = Process-Data $global:RawData $global:Mapping
+            $global:ProcessedData = $result.Data
+            
+            # Update the grid
+            Update-GridView
+            
+            $txtLog.Text += "`r`nShowing all fields and rows."
+        } catch {
+            $txtLog.Text += "`r`nError reprocessing data: $_"
+        }
+    } else {
+        $txtLog.Text += "`r`nAll rows are now visible."
+    }
 }
 
 # Export processed data
@@ -651,10 +755,179 @@ function Export-Errors {
     }
 }
 
+# Update grid view - accepts optional parameter to sort by mapping file order
+function Update-GridView {
+    param(
+        [bool]$useMappingOrder = $false  # Default to false for data CSV column order
+    )
+    
+    if ($global:ProcessedData -and $global:ProcessedData.Count -gt 0) {
+        # Clear the grid
+        $grid.DataSource = $null
+        $grid.Rows.Clear()
+        $grid.Columns.Clear()
+        
+        $firstRow = $global:ProcessedData[0]
+        $availableColumns = $firstRow.PSObject.Properties.Name
+        
+        # Determine column order based on provided parameter
+        $orderedColumns = @()
+        
+        if ($useMappingOrder -and $global:MappingColumnOrder.Count -gt 0) {
+            # Use mapping order
+            $txtLog.AppendText("`r`nUsing mapping file column order")
+            
+            # First add all columns from mapping that exist in our data
+            foreach ($col in $global:MappingColumnOrder) {
+                if ($availableColumns -contains $col) {
+                    $orderedColumns += $col
+                }
+            }
+            
+            # Then add any remaining columns not in mapping
+            foreach ($col in $availableColumns) {
+                if ($orderedColumns -notcontains $col) {
+                    $orderedColumns += $col
+                }
+            }
+        } 
+        else {
+            # Use original CSV order with field name translation
+            $txtLog.AppendText("`r`nUsing data file column order with renamed fields")
+            
+            # First handle columns from original data that exist in our processed data
+            # accounting for renamed fields (via mapping)
+            foreach ($origCol in $global:OriginalColumnOrder) {
+                $targetCol = $origCol
+                
+                # Check if this column was renamed via mapping
+                if ($global:SourceToNewFieldMap.ContainsKey($origCol)) {
+                    $targetCol = $global:SourceToNewFieldMap[$origCol]
+                    $txtLog.AppendText("`r`nTranslating column '$origCol' to '$targetCol'")
+                }
+                
+                # Add the column if it exists in processed data
+                if ($availableColumns -contains $targetCol -and $orderedColumns -notcontains $targetCol) {
+                    $orderedColumns += $targetCol
+                }
+            }
+            
+            # Then add any columns not already added
+            foreach ($col in $availableColumns) {
+                if ($orderedColumns -notcontains $col) {
+                    $orderedColumns += $col
+                }
+            }
+        }
+        
+        # If we somehow don't have ordered columns, fall back to whatever is available
+        if ($orderedColumns.Count -eq 0) {
+            $orderedColumns = $availableColumns
+        }
+        
+        # Log column order for debugging
+        $txtLog.AppendText("`r`nFinal column order: $($orderedColumns -join ', ')")
+        
+        # Additional debug logging
+        $txtLog.AppendText("`r`nOriginal CSV order: $($global:OriginalColumnOrder -join ', ')")
+        $txtLog.AppendText("`r`nMapping order: $($global:MappingColumnOrder -join ', ')")
+        
+        # Debug mapping information with backwards compatible string joining
+        $mappings = @()
+        foreach ($key in $global:SourceToNewFieldMap.Keys) {
+            $mappings += "$key => $($global:SourceToNewFieldMap[$key])"
+        }
+        $txtLog.AppendText("`r`nField name mappings: " + ($mappings -join ', '))
+        
+        # Create columns
+        foreach ($colName in $orderedColumns) {
+            $column = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+            $column.HeaderText = $colName
+            $column.Name = $colName
+            $column.Width = 120
+            $column.SortMode = [System.Windows.Forms.DataGridViewColumnSortMode]::NotSortable
+            $grid.Columns.Add($column)
+        }
+        
+        # Add rows manually with alternating colors
+        for ($rowIdx = 0; $rowIdx -lt $global:ProcessedData.Count; $rowIdx++) {
+            $rowObj = $global:ProcessedData[$rowIdx]
+            
+            # Add new row
+            $grid.Rows.Add() | Out-Null
+            $currentRow = $grid.Rows[$grid.Rows.Count - 1]
+            
+            # Set alternating row color
+            if ($rowIdx % 2 -eq 1) {
+                $currentRow.DefaultCellStyle.BackColor = [System.Drawing.Color]::AliceBlue
+            }
+            
+            # Add cell values with proper type handling
+            for ($colIdx = 0; $colIdx -lt $orderedColumns.Count; $colIdx++) {
+                $colName = $orderedColumns[$colIdx]
+                
+                # Handle null values and ensure proper string conversion
+                if ($null -eq $rowObj.$colName) {
+                    $currentRow.Cells[$colIdx].Value = [DBNull]::Value
+                } else {
+                    # Convert all values to strings to avoid formatting issues
+                    $currentRow.Cells[$colIdx].Value = "$($rowObj.$colName)"
+                }
+            }
+        }
+        
+        # Mark error cells
+        foreach ($key in $global:ErrorCells.Keys) {
+            $parts = $key -split "-"
+            if ($parts.Count -eq 2) {
+                $rowIndex = [int]$parts[0]
+                $colName = $parts[1]
+                
+                # Find column index
+                $colIndex = -1
+                for ($i = 0; $i -lt $grid.Columns.Count; $i++) {
+                    if ($grid.Columns[$i].Name -eq $colName) {
+                        $colIndex = $i
+                        break
+                    }
+                }
+                
+                # Set cell background to pink if found
+                if ($rowIndex -lt $grid.Rows.Count -and $colIndex -ge 0) {
+                    $grid.Rows[$rowIndex].Cells[$colIndex].Style.BackColor = [System.Drawing.Color]::LightPink
+                }
+            }
+        }
+    }
+}
+
+# Sort by Data column order
+function Sort-ByDataOrder {
+    $txtLog.AppendText("`r`nSorting by original data file column order")
+    
+    # Update the grid with data file column order
+    if ($global:ProcessedData -and $global:ProcessedData.Count -gt 0) {
+        Update-GridView $false
+    }
+}
+
+# Sort by Mapping column order
+function Sort-ByMappingOrder {
+    $txtLog.AppendText("`r`nSorting by mapping file column order")
+    
+    # Update the grid with mapping file column order
+    if ($global:ProcessedData -and $global:ProcessedData.Count -gt 0) {
+        Update-GridView $true
+    }
+}
+
 # Button click handlers
 $btnLoadFiles.Add_Click({ Load-Files })
 $btnFilter.Add_Click({ Show-ErrorsOnly })
+$btnMappedOnly.Add_Click({ Show-MappedOnly })
 $btnReset.Add_Click({ Show-AllData })
+$btnSortByData.Add_Click({ Sort-ByDataOrder })
+$btnSortByMapping.Add_Click({ Sort-ByMappingOrder })
 $btnExport.Add_Click({ Export-Data })
 $btnExportErrors.Add_Click({ Export-Errors })
 
