@@ -1,3 +1,5 @@
 SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,Transformation,TransformFunction
+Title,Title,String,N,N,,,
 Title,Gender,String,N,Y,^(Male|Female)$,Y,GenderTransform
-BorrowerID,,String,Y,Y,^[A-Za-z][0-9]{4}[A-Za-z]{2}$,N
+BorrowerID,BorrowerID,String,Y,Y,^[A-Za-z][0-9]{4}[A-Za-z]{2}$,N,
+BorrowerID,BorrowerType,String,N,N,,Y,BorrowerTypeTransform
