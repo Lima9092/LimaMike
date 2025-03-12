@@ -47,6 +47,7 @@ function Load-Data($path) {
 function Process-Data($data, $mapping) {
     $result = @()
     $log = @()
+    $global:ErrorCells.Clear()  # Clear error cells before processing
 
     # Create lookup dictionary from mapping
     $mapLookup = @{}
@@ -55,11 +56,20 @@ function Process-Data($data, $mapping) {
             $mapLookup[$m.SourceField] = $m
         }
     }
+    
+    # Create dictionary to track which mandatory fields are in the mapping
+    $mandatoryFields = @{}
+    foreach ($m in $mapping) {
+        if ($m.Mandatory -eq "Y") {
+            $mandatoryFields[$m.SourceField] = $true
+        }
+    }
 
     # Process each row
     for ($i = 0; $i -lt $data.Count; $i++) {
         $row = $data[$i]
         $newRow = @{}
+        $processedFields = @{}  # Track which fields we've processed
         
         # Process each property in the row
         foreach ($prop in $row.PSObject.Properties) {
@@ -76,11 +86,12 @@ function Process-Data($data, $mapping) {
                 $doTransform = $map.Transformation -eq "Y"
                 $transformFunction = $map.TransformFunction
                 $error = $null
+                
+                # Track that we've processed this field
+                $processedFields[$sourceField] = $true
 
-                # Mandatory check
-                if ($mandatory -and [string]::IsNullOrEmpty($value)) {
-                    $error = "Mandatory field missing"
-                }
+                # Store original value before transformation for mandatory check
+                $originalValue = $value
                 
                 # Apply transformation
                 if ($doTransform -and $transformFunction -and $global:TransformFunctions.ContainsKey($transformFunction)) {
@@ -88,6 +99,16 @@ function Process-Data($data, $mapping) {
                         $value = & $global:TransformFunctions[$transformFunction] $value
                     } catch {
                         $error = "Error in transformation: $_"
+                    }
+                }
+                
+                # Mandatory check - check BOTH original and transformed values
+                # This ensures we catch empty values even after transformation
+                if ($mandatory) {
+                    if ([string]::IsNullOrEmpty($originalValue)) {
+                        $error = "Mandatory field missing (original value)"
+                    } elseif ([string]::IsNullOrEmpty($value)) {
+                        $error = "Mandatory field empty after transformation"
                     }
                 }
                 
@@ -122,7 +143,7 @@ function Process-Data($data, $mapping) {
 
                 # Record errors
                 if ($error) {
-                    $log += "Row ${i} Field '$sourceField': $error"
+                    $log += "Row $($i+1) Field '$sourceField': $error"
                     $global:ErrorCells["$i-$newField"] = $error
                 }
             }
@@ -132,11 +153,28 @@ function Process-Data($data, $mapping) {
             }
         }
         
+        # Check for missing mandatory fields that weren't in the input at all
+        foreach ($mandatoryField in $mandatoryFields.Keys) {
+            if (-not $processedFields.ContainsKey($mandatoryField)) {
+                # This mandatory field wasn't in the input data
+                $map = $mapLookup[$mandatoryField]
+                $newField = if (-not [string]::IsNullOrEmpty($map.NewField)) { $map.NewField } else { $mandatoryField }
+                
+                # Add empty value to output
+                $newRow[$newField] = ""
+                
+                # Record the error
+                $error = "Required field '$mandatoryField' is missing from input data"
+                $log += "Row $($i+1): $error"
+                $global:ErrorCells["$i-$newField"] = $error
+            }
+        }
+        
         # Add the processed row
         if ($newRow.Keys.Count -gt 0) {
             $result += [PSCustomObject]$newRow
         } else {
-            $log += "Row ${i} - No valid properties found"
+            $log += "Row $($i+1) - No valid properties found"
         }
     }
     
@@ -553,6 +591,22 @@ function Export-Data {
         return
     }
     
+    # Check for errors and provide a warning if any exist
+    if ($global:ErrorCells.Count -gt 0) {
+        $errorCount = $global:ErrorCells.Count
+        $warningResult = [System.Windows.Forms.MessageBox]::Show(
+            "Warning: Your data contains $errorCount error(s). Do you still want to proceed with the export?",
+            "Export Warning",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        )
+        
+        if ($warningResult -eq [System.Windows.Forms.DialogResult]::No) {
+            $txtLog.Text += "`r`nExport cancelled due to validation errors."
+            return
+        }
+    }
+    
     $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
     $saveFileDialog.Filter = "CSV Files (*.csv)|*.csv"
     $saveFileDialog.Title = "Save Processed Data"
@@ -561,8 +615,10 @@ function Export-Data {
         try {
             $global:ProcessedData | Export-Csv -Path $saveFileDialog.FileName -NoTypeInformation
             [System.Windows.Forms.MessageBox]::Show("Data exported successfully to $($saveFileDialog.FileName)")
+            $txtLog.Text += "`r`nData exported successfully to $($saveFileDialog.FileName)"
         } catch {
             [System.Windows.Forms.MessageBox]::Show("Error exporting data: $_")
+            $txtLog.Text += "`r`nError exporting data: $_"
         }
     }
 }
@@ -587,8 +643,10 @@ function Export-Errors {
             
             $errorObjects | Export-Csv -Path $saveFileDialog.FileName -NoTypeInformation
             [System.Windows.Forms.MessageBox]::Show("Errors exported successfully to $($saveFileDialog.FileName)")
+            $txtLog.Text += "`r`nErrors exported successfully to $($saveFileDialog.FileName)"
         } catch {
             [System.Windows.Forms.MessageBox]::Show("Error exporting data: $_")
+            $txtLog.Text += "`r`nError exporting errors: $_"
         }
     }
 }
