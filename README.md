@@ -3,7 +3,9 @@
 A PowerShell-based utility for transforming and validating CSV data according to mapping rules.
 
 ### Application Interface
-![Application Interface](Library-Data-Tool.png)
+![Application Interface](Library-Data-Tool-Books.png)
+
+![Application Interface](Library-Data-Tool-Borrowers.png)
 
 ## Overview
 
