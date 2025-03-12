@@ -20,9 +20,11 @@ This tool provides a graphical interface for:
 ## Features
 
 - **Data Mapping**: Define source and target field names, mandatory fields, data types, and validation rules
+- **Multiple Field Mappings**: Support for mapping a single source field to multiple target fields
 - **Data Validation**: Validate data against regex patterns with visual error highlighting
 - **Data Transformation**: Apply custom transformation functions to data fields
 - **Visual Interface**: View data in a grid with alternating row colors, row numbers, and error highlighting
+- **Console Minimization**: Automatically minimizes the PowerShell console window for a cleaner UI experience
 - **Filtering**: 
   - Show only rows with validation errors
   - Show only mapped fields
@@ -30,6 +32,7 @@ This tool provides a graphical interface for:
   - Sort by original data file column order
   - Sort by mapping file column order
 - **Export**: Export processed data and error logs to CSV files
+- **Detailed Logging**: Comprehensive logging of field mappings, transformations, and errors
 
 ## Requirements
 
@@ -72,7 +75,10 @@ The tool processes data through several steps:
 - Maps source fields to new field names if specified in the `NewField` column
 - If `NewField` is empty, the original `SourceField` name is retained
 - Example: "Title" field becomes "BookTitle" if specified in mapping
+- Supports mapping a single source field to multiple target fields
+- Example: "Name" field could be mapped to both "FirstName" and "LastName" with different transformations
 - The tool preserves a map of field name changes for consistent column ordering
+- Tracks and logs fields with multiple mappings for better transparency
 
 ### 2. Data Type Conversion
 - Converts data values to the specified type in the `DataType` column
@@ -172,8 +178,10 @@ PublishDate,PublicationDate,datetime,Y,Y,,,N,
 - Validates "Title" length is between 1-100 characters
 - Validates "Pages" contains only digits
 - All mandatory fields are checked for values
+- A single field can be mapped to multiple target fields with different transformations
+- The tool tracks and reports fields that have multiple mappings
 
-The tool provides a complete audit trail of the processing through the log panel, showing which fields were transformed and any validation errors encountered.
+The tool provides a complete audit trail of the processing through the log panel, showing which fields were transformed, which fields had multiple mappings, and any validation errors encountered. It also reports on generated fields created through transformations.
 
 ## Validation Rule Examples
 
@@ -220,15 +228,44 @@ You can add custom transformation functions by editing the script. Each function
 Example transformation function:
 
 ```powershell
+# Transformation functions
 function GenderTransform($value) {
     if ($value -match "Mr") { return "Male" }
     elseif ($value -match "Mrs" -or $value -match "Miss") { return "Female" }
     else { return "" }
 }
 
-$global:TransformFunctions = @{
-    "GenderTransform" = ${function:GenderTransform}
+function BorrowerTypeTransform($value) {
+    if ($value -match "^[A-Za-z][0-9]{4}[A-Za-z]{2}$") { 
+        return "Student" 
+    } else { 
+        return "Teacher" 
+    }
 }
+
+$global:TransformFunctions = @{}
+$global:TransformFunctions["GenderTransform"] = ${function:GenderTransform}
+$global:TransformFunctions["BorrowerTypeTransform"] = ${function:BorrowerTypeTransform}
+```
+
+## Extending Transformations
+
+You can add custom transformation functions by editing the script. Each function should:
+
+1. Accept a single input value
+2. Return the transformed value
+3. Be registered in the `$global:TransformFunctions` hashtable
+
+The recommended way to register transformation functions:
+
+```powershell
+function CustomTransform($value) {
+    # Your transformation logic here
+    return $transformedValue
+}
+
+# Register the function
+$global:TransformFunctions["CustomTransform"] = ${function:CustomTransform}
 ```
 
 ## Implementing Complex Validation
@@ -241,7 +278,87 @@ function ValidateUKPostcode($value) {
     $value = $value.ToUpper().Replace(" ", "")
     
     # Basic format check using regex
-    if (-not ($value -match '^[A-Z]{1,2}[0-9R][0-9A-Z]?[0-9][ABD-HJLNP-UW-Z]{2}$')) {
+    if (-not ($value -match '^[A-Z]{1,2}[0-9R][0-9A-Z]?[0-9][ABD-HJLNP-UW-Z]{2}
+
+## Validation Best Practices
+
+1. **Start simple**: Begin with basic validations and add complexity as needed
+2. **Test thoroughly**: Create test data that intentionally violates validation rules
+3. **Layer validation**: Use regex for format, custom functions for complex logic
+4. **Balance strictness**: Overly strict validation may reject valid data
+5. **Use appropriate error handling**: Choose between warning, error, and log based on data importance
+6. **Document patterns**: Keep a record of regex patterns and their purposes
+7. **Consider data cleansing**: Sometimes it's better to transform/cleanse than reject
+
+## User Interface Improvements
+
+The latest version includes several UI enhancements:
+
+- **Clear layout**: Improved organization with proper panel placement
+- **Row numbers**: Easy identification of data rows in the grid
+- **Alternating row colors**: Better visual separation of rows
+- **Error highlighting**: Clear visual indication of validation issues
+- **Column headers**: Improved styling and click behavior for selection
+- **Resizable panels**: Adjust data and log panel sizes as needed
+- **Better error handling**: Graceful handling of display errors
+
+## Logging
+
+The tool provides detailed logging of:
+- Loaded mapping and data files
+- Field name translations 
+- Original column orders from both data and mapping
+- Validation errors with specific details
+- Transformation summaries including affected fields and records
+- Row and column counts
+- Error details and locations
+
+## Implementation Details
+
+The tool is built using:
+- PowerShell scripting language
+- Windows Forms for the GUI
+- .NET Framework classes for data manipulation
+- Regular expressions for validation
+- P/Invoke for console window management
+
+The main components are:
+- Form layout with resizable panels
+- DataGridView for data display with row numbers
+- Support for row and column selection
+- Alternating row colors and error cell highlighting
+- Comprehensive logging system
+- CSV parsing with support for quoted fields
+
+## Example Mapping Scenarios
+
+### Library Book Catalog:
+```csv
+SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,Transformation,TransformFunction
+Title,BookTitle,string,Y,Y,^.{1,100}$,N,
+Author,AuthorName,string,Y,N,,N,
+ISBN,,string,Y,Y,^(?:ISBN(?:-13)?:?\s)?(?=[0-9X]{10}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$),N,
+PublishedYear,,int,Y,Y,^(19|20)\d{2}$,N,
+PageCount,,int,N,Y,^\d{1,4}$,N,
+Publisher,,string,Y,N,,N,
+```
+
+### Library Borrower Records:
+```csv
+SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,Transformation,TransformFunction
+BorrowerID,,string,Y,Y,^[A-Z][0-9]{4}[A-Z]{2}$|^T[0-9]{5}$,Y,BorrowerTypeTransform
+BorrowerID,BorrowerType,string,N,N,,Y,BorrowerTypeTransform
+Name,FirstName,string,Y,Y,^[A-Za-z\-']{2,30}$,Y,ExtractFirstName
+Name,LastName,string,Y,Y,^[A-Za-z\-']{2,30}$,Y,ExtractLastName
+Title,,string,N,N,,Y,GenderTransform
+Title,Gender,string,N,N,,Y,GenderTransform
+EmailAddress,,string,Y,Y,^[\w\.-]+@[\w\.-]+\.\w+$,N,
+```
+
+Note how in the Borrower Records example:
+- `BorrowerID` is mapped twice (once as is, once to extract a type)
+- `Name` is mapped to both `FirstName` and `LastName` with different transformations
+- `Title` is both kept as-is and transformed to `Gender`)) {
         return $false
     }
     
@@ -257,9 +374,9 @@ function ValidateUKPostcode($value) {
     return $true
 }
 
-$global:ValidationFunctions = @{
-    "ValidateUKPostcode" = ${function:ValidateUKPostcode}
-}
+# Register the validation function
+$global:ValidationFunctions = @{}
+$global:ValidationFunctions["ValidateUKPostcode"] = ${function:ValidateUKPostcode}
 ```
 
 Then in your mapping file:
@@ -269,50 +386,46 @@ SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling,
 Postcode,,string,Y,Y,,Error,N,,ValidateUKPostcode
 ```
 
-## Validation Best Practices
+## Special Features
 
-1. **Start simple**: Begin with basic validations and add complexity as needed
-2. **Test thoroughly**: Create test data that intentionally violates validation rules
-3. **Layer validation**: Use regex for format, custom functions for complex logic
-4. **Balance strictness**: Overly strict validation may reject valid data
-5. **Use appropriate error handling**: Choose between warning, error, and log based on data importance
-6. **Document patterns**: Keep a record of regex patterns and their purposes
-7. **Consider data cleansing**: Sometimes it's better to transform/cleanse than reject
+### Multi-Field Mapping
 
-## Example Validation Scenarios
+The tool supports mapping a single source field to multiple target fields with different processing rules, as shown in the example mapping scenarios. This allows:
+- Splitting a field into multiple components
+- Creating different views of the same data
+- Applying different validation rules to each target field
+- Transforming the same source data in different ways
 
-**Library Book Catalog**:
-```csv
-SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling
-Title,,string,Y,N,,Error
-ISBN,,string,Y,Y,^(?:ISBN(?:-13)?:?\s)?(?=[0-9X]{10}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$),Error
-PublishedYear,,int,Y,Y,^(19|20)\d{2}$,Error
-PageCount,,int,N,Y,^\d{1,4}$,Warning
-Publisher,,string,Y,N,,Log
-```
+### Field Generation Detection
 
-**UK Customer Records**:
-```csv
-SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling
-CustomerID,,string,Y,Y,^C\d{6}$,Error
-FirstName,,string,Y,Y,^[A-Za-z\-']{2,30}$,Warning
-LastName,,string,Y,Y,^[A-Za-z\-']{2,30}$,Warning
-EmailAddress,,string,Y,Y,^[\w\.-]+@[\w\.-]+\.\w+$,Error
-Postcode,,string,Y,Y,^([A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}|GIR ?0A{2})$,Error
-TelephoneNumber,,string,N,Y,^(?:(?:\+44\s?|0)(?:1\d{8,9}|[23]\d{9}|7(?:[1345789]\d{8}|624\d{6})))$,Warning
-NationalInsurance,,string,N,Y,^[A-CEGHJ-PR-TW-Z]{1}[A-CEGHJ-NPR-TW-Z]{1}[0-9]{6}[A-D]{1}$,Log
-```
+The tool now tracks and reports on:
+- Fields that have been transformed
+- New fields that were generated through transformation
+- The number of records affected by transformations
+- Source fields with multiple mappings
 
-**UK Financial Transactions**:
-```csv
-SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling
-TransactionID,,string,Y,Y,^T\d{10}$,Error
-Amount,,decimal,Y,Y,^\d+\.\d{2}$,Error
-Currency,,string,Y,Y,^(GBP|EUR|USD)$,Error
-SortCode,,string,Y,Y,^\d{2}-\d{2}-\d{2}$,Error
-AccountNumber,,string,Y,Y,^\d{8}$,Error
-TransactionDate,,datetime,Y,Y,^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$,Error
-VATNumber,,string,N,Y,^GB\d{9}$|^GB\d{12}$,Log
+### Console Window Management
+
+The tool automatically minimizes the PowerShell console window when launched to provide a cleaner user interface experience. This is accomplished through P/Invoke calls to the Windows API:
+
+```powershell
+# Minimize the PowerShell command prompt
+Add-Type @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class Win32 {
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        [DllImport("kernel32.dll", ExactSpelling = true)]
+        public static extern IntPtr GetConsoleWindow();
+    }
+"@
+$consolePtr = [Win32]::GetConsoleWindow()
+if ($consolePtr -ne [IntPtr]::Zero) {
+    # 6 = Minimize the window
+    [Win32]::ShowWindow($consolePtr, 6)
+}
 ```
 
 ## User Interface Improvements
@@ -345,6 +458,7 @@ The tool is built using:
 - Windows Forms for the GUI
 - .NET Framework classes for data manipulation
 - Regular expressions for validation
+- P/Invoke for console window management
 
 The main components are:
 - Form layout with resizable panels
@@ -353,3 +467,29 @@ The main components are:
 - Alternating row colors and error cell highlighting
 - Comprehensive logging system
 - CSV parsing with support for quoted fields
+
+## Special Features
+
+### Multi-Field Mapping
+
+The tool supports mapping a single source field to multiple target fields with different processing rules:
+
+```csv
+SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,Transformation,TransformFunction
+CustomerName,FirstName,string,Y,Y,^[A-Z][a-z]+$,Y,ExtractFirstName
+CustomerName,LastName,string,Y,Y,^[A-Z][a-z]+$,Y,ExtractLastName
+```
+
+This allows:
+- Splitting a field into multiple components
+- Creating different views of the same data
+- Applying different validation rules to each target field
+- Transforming the same source data in different ways
+
+### Field Generation Detection
+
+The tool now tracks and reports on:
+- Fields that have been transformed
+- New fields that were generated through transformation
+- The number of records affected by transformations
+- Source fields with multiple mappings
