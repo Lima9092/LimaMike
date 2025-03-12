@@ -52,8 +52,7 @@ The mapping file should be a CSV with the following columns:
 | Validation | Y/N - whether to validate the field |
 | ValidationRule | Regex pattern for validation |
 | Transformation | Y/N - whether to transform the field |
-| TransformFunction | Name of the transformation function to apply |
-| DefaultValue | Default value if error handling is set to Default |
+| TransformFunction | Name of the transformation function to apply | 
 
 I'll expand the Data Processing section to provide more detailed information about the data conversion functionality:
 
