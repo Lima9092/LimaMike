@@ -51,23 +51,98 @@ The mapping file should be a CSV with the following columns:
 | Mandatory | Y/N - whether the field is required |
 | Validation | Y/N - whether to validate the field |
 | ValidationRule | Regex pattern for validation |
-| ErrorHandling | How to handle validation errors |
 | Transformation | Y/N - whether to transform the field |
 | TransformFunction | Name of the transformation function to apply |
 | DefaultValue | Default value if error handling is set to Default |
 
-## Example Mapping File
-
-```csv
-SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling,Transformation,TransformFunction,DefaultValue
-Title,BookTitle,string,Y,N,,Error,N,,
-Author,AuthorName,string,Y,N,,Error,N,,
-Barcode,,string,Y,Y,^\d{12}$,Error,N,,
-Pages,PageCount,int,N,Y,^\d+$,Default,N,,0
-```
+I'll expand the Data Processing section to provide more detailed information about the data conversion functionality:
 
 ## Data Processing
 
+The tool processes data through several steps:
+
+### 1. Field Mapping
+- Maps source fields to new field names if specified in the `NewField` column
+- If `NewField` is empty, the original `SourceField` name is retained
+- Example: "Title" field becomes "BookTitle" if specified in mapping
+
+### 2. Data Type Conversion
+- Converts data values to the specified type in the `DataType` column
+- Supported data types include:
+  - **string**: Default type, no conversion performed
+  - **int**: Converts text values to integers
+    - Example: "123" → 123
+    - Fails conversion if value contains non-numeric characters
+  - **decimal**: Converts text values to decimal numbers
+    - Example: "45.67" → 45.67
+    - Supports decimal points according to current culture
+    - Fails if value contains invalid characters
+  - **datetime**: Converts text values to date/time objects
+    - Example: "2023-10-15" → DateTime object
+    - Uses current culture's date format by default
+    - Fails if the date format is invalid
+- Failed conversions are reported as validation errors
+- When conversion fails, the original value is preserved
+
+### 3. Mandatory Field Validation
+- Checks if required fields (marked with `Mandatory` = "Y") are present
+- Reports an error if a mandatory field is empty or null
+- Example error: "Row 2 Field 'Title': Mandatory field missing"
+
+### 4. Pattern Validation
+- Validates data against regex patterns in the `ValidationRule` column
+- Only performed when `Validation` = "Y"
+- Validation succeeds if the value matches the pattern
+- Example: Validating email addresses against pattern `^[\w\.-]+@[\w\.-]+\.\w+$`
+- Validation errors are highlighted in pink in the grid
+
+### 5. Transformation
+- Applies custom transformation functions to fields
+- Only performed when `Transformation` = "Y"
+- Uses the function named in the `TransformFunction` column
+- Example transformation: Converting "Mr" to "Male" with `GenderTransform` function
+- Transformations can combine or modify values, change formats, etc.
+- Logs the number of fields and records affected by transformations
+
+### Processing Flow
+1. Each record from the source data is processed individually
+2. For each field in the record:
+   - Apply mapping to determine output field name
+   - Perform type conversion if specified
+   - Check mandatory requirement
+   - Apply validation if enabled
+   - Apply transformation if enabled
+3. Record validation errors for display and logging
+4. Output processed data to the grid
+5. Display error cells in pink
+6. Log transformations applied to the data
+
+### Examples
+
+**Input CSV:**
+```
+Title,Author,Pages,PublishDate
+The Great Gatsby,F. Scott Fitzgerald,180,04/10/1925
+```
+
+**Mapping CSV:**
+```
+SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,Transformation,TransformFunction
+Title,BookTitle,string,Y,Y,^.{1,100}$,N,
+Author,AuthorName,string,Y,N,,N,
+Pages,PageCount,int,N,Y,^\d+$,N,
+PublishDate,PublicationDate,datetime,Y,Y,,,N,
+```
+
+**Processing Result:**
+- "Title" → "BookTitle" (field mapping)
+- "Pages" → 180 (converted from string to integer)
+- "PublishDate" → DateTime object (converted to datetime type)
+- Validates "Title" length is between 1-100 characters
+- Validates "Pages" contains only digits
+- All mandatory fields are checked for values
+
+The tool provides a complete audit trail of the processing through the log panel, showing which fields were transformed and any validation errors encountered.
 The tool performs the following operations on the data:
 
 1. **Field Mapping**: Maps source fields to new field names if specified
@@ -109,33 +184,6 @@ The `ValidationRule` column in the mapping file accepts regular expression patte
 | IP Address | `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$` | Format: 192.168.1.1 |
 | UK Passport Number | `^[0-9]{9}$` | UK passport number (9 digits) |
 | UK NHS Number | `^\d{3}[ -]?\d{3}[ -]?\d{4}$` | Format: 123 456 7890 |
-
-## Error Handling Options
-
-The `ErrorHandling` column in the mapping file specifies how validation errors should be treated. Valid options are:
-
-| Option | Description |
-| ------ | ----------- |
-| `Warning` | Highlights the cell, logs the error, but allows processing to continue |
-| `Error` | Highlights the cell, logs the error, and marks the record as invalid |
-| `Log` | Only logs the error without visual highlighting or affecting processing |
-| `Ignore` | Validation fails but no error is logged or displayed |
-| `Reject` | The entire record is rejected from processing |
-| `Null` | Error field is set to null/empty but record is processed |
-| `Default` | Error field is set to a default value (specified in DefaultValue column) |
-
-Example of mapping file with error handling:
-
-```csv
-SourceField,NewField,DataType,Mandatory,Validation,ValidationRule,ErrorHandling,Transformation,TransformFunction,DefaultValue
-Title,BookTitle,string,Y,N,,Error,N,,
-Author,AuthorName,string,Y,N,,Error,N,,
-Barcode,,string,Y,Y,^\d{12}$,Error,N,,
-PostCode,,string,Y,Y,^([A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}|GIR ?0A{2})$,Warning,N,,
-Pages,PageCount,int,N,Y,^\d+$,Default,N,,0
-Email,,string,N,Y,^[\w\.-]+@[\w\.-]+\.\w+$,Log,N,,
-PublicationDate,,datetime,Y,Y,^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$,Null,N,,
-```
 
 ## Extending Transformations
 
@@ -264,11 +312,3 @@ The main components are:
 - DataGridView for data display with row numbers
 - Support for row and column selection
 - Alternating row colors and error cell highlighting
-
-## License
-
-[Specify your license here]
-
-## Contributing
-
-[Specify contribution guidelines here]
